@@ -1,0 +1,18 @@
+# Data and Large Files
+data/
+*.h5
+*.mat
+
+# Python/Environment
+__pycache__/
+.venv/
+env/
+*.pyc
+
+# IDEs
+.vscode/
+.DS_Store
+
+# Project Outputs
+outputs/
+Diff-Recon.code-workspace
