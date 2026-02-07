@@ -22,3 +22,8 @@ Below is a comparison of how different frequency-domain masks affect the spatial
 ## 🛠️ How to Run
 1. **Install Dependencies:** `pip install -r requirements.txt`
 2. **Generate Visualizations:** Run `python src/visualize_results.py` to recreate the k-space comparison grid in the `/outputs` folder.
+
+## 🌊 Phase 2: Forward Diffusion Process
+Implemented a **Gaussian Variance Scheduler** ($T=1000$) to model image degradation. Using the reparameterization trick, the system can sample a noisy image $x_t$ at any arbitrary timestep directly from the ground truth $x_0$, which is essential for efficient training of the score-based model.
+
+**Mathematical Foundation:** $x_t = \sqrt{\bar{\alpha}_t}x_0 + \sqrt{1 - \bar{\alpha}_t}\epsilon, \quad \epsilon \sim \mathcal{N}(0, \mathbf{I})$
