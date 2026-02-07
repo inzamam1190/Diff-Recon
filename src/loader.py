@@ -1,78 +1,60 @@
 import h5py
-import matplotlib.pyplot as plt
 import torch
 import fastmri
 from fastmri.data import transforms as T
 
 
-def load_and_visualize(file_path, mask_outer=False):
-    """
-    Load MRI k-space data from an H5 file, optionally apply frequency masking,
-    and visualize both the k-space (frequency domain) and reconstructed image (spatial domain).
+def load_and_reconstruct(file_path, mask_type=None):
+    """Load and reconstruct an MRI slice from k-space stored in an HDF5 file.
 
-    This function performs the following operations:
-    1. Reads k-space data from an HDF5 file containing MRI measurements
-    2. Extracts the middle slice from a 3D volume for analysis
-    3. Converts the k-space data to a PyTorch tensor
-    4. Optionally applies a mask to zero out outer 50% of k-space frequencies
-    5. Applies inverse 2D FFT to transform k-space to image space
-    6. Computes the magnitude of complex-valued image data
-    7. Displays side-by-side visualization of log-scaled k-space and reconstructed image
+    The function loads a k-space dataset named "kspace" from the given HDF5
+    file, selects the middle slice of the volume, converts it to a PyTorch
+    tensor, optionally applies a frequency-domain mask, performs an inverse
+    2D FFT to obtain the image, and computes the magnitude.
+
+    Mask behavior (controlled by ``mask_type``):
+        - ``None`` (default): no masking, use full k-space.
+        - ``'low_pass'``: keep the central 10% of k-space (indices
+          ``h//2-16:h//2+16`` and ``w//2-16:w//2+16``) and zero the rest.
+        - ``'high_pass'``: zero the central third of k-space and keep the edges.
 
     Args:
-        file_path (str): Path to the H5 file containing k-space MRI data with key "kspace"
-        mask_outer (bool, optional): If True, zeros out outer 50% of k-space frequencies
-                                     (central 50% region retained). Defaults to False.
+        file_path (str): Path to the HDF5 file containing k-space data under the
+            key "kspace". Expected shape is (slices, height, width) for single-coil.
+        mask_type (str or None, optional): Type of mask to apply; one of
+            {None, 'low_pass', 'high_pass'}. Defaults to ``None``.
 
     Returns:
-        None: Displays matplotlib figure with k-space and reconstructed image visualizations
+        tuple: A tuple containing:
+            - image_abs (torch.Tensor): Magnitude of the reconstructed image.
+            - masked_kspace (torch.Tensor): The masked k-space tensor.
 
     Raises:
-        FileNotFoundError: If the specified H5 file does not exist
-        KeyError: If the H5 file does not contain a "kspace" dataset
+        FileNotFoundError: If the specified HDF5 file does not exist.
+        KeyError: If the HDF5 file does not contain a "kspace" dataset.
     """
 
-    # 1. Open the H5 file
     hf = h5py.File(file_path, "r")
-
-    # 2. Extract raw k-space data
-    # Shape: (Slices, Height, Width) for singlecoil
     kspace = hf["kspace"][()]
-
-    # Pick the middle slice
-    slice_idx = kspace.shape[0] // 2
-    slice_kspace = kspace[slice_idx]
-
-    # 3. Transform to Tensor
+    slice_kspace = kspace[kspace.shape[0] // 2]
     slice_kspace_tensor = T.to_tensor(slice_kspace)
 
-    # --- Optional Masking to Zero Out Outer 50% of K-Space Frequencies ---
-    if mask_outer:
-        h, w, _ = slice_kspace_tensor.shape
-        # Create a mask that zeros out the outer 50%
+    h, w, _ = slice_kspace_tensor.shape
+
+    # Create the mask
+    if mask_type == "low_pass":
         mask = torch.zeros((h, w, 1))
-        mask[h // 4 : 3 * h // 4, w // 4 : 3 * w // 4, :] = 1
-        slice_kspace_tensor = slice_kspace_tensor * mask
-    # -------------------------------------------
+        # Keep only a tiny 10% center to really see the blur
+        mask[h // 2 - 16 : h // 2 + 16, w // 2 - 16 : w // 2 + 16, :] = 1
+    elif mask_type == "high_pass":
+        mask = torch.ones((h, w, 1))
+        mask[h // 2 - 32 : h // 2 + 32, w // 2 - 32 : w // 2 + 32, :] = 0
+    else:
+        mask = torch.ones((h, w, 1))
 
-    # 4. Apply Inverse FFT
-    sampled_image = fastmri.ifft2c(slice_kspace_tensor)
-    image_abs = fastmri.complex_abs(sampled_image)
+    # Apply mask and IFFT
+    masked_kspace = slice_kspace_tensor * mask
+    image = fastmri.ifft2c(masked_kspace)
+    image_abs = fastmri.complex_abs(image)
 
-    # 5. Visualization
-    fig, ax = plt.subplots(1, 2, figsize=(12, 5))
-
-    kspace_mag = torch.log(fastmri.complex_abs(slice_kspace_tensor) + 1e-9)
-    ax[0].imshow(kspace_mag, cmap="gray")
-    ax[0].set_title("Log K-Space (Frequency Domain)")
-
-    ax[1].imshow(image_abs, cmap="gray")
-    ax[1].set_title("Reconstructed Knee")
-
-    plt.show()
-
-
-if __name__ == "__main__":
-    # Update this path to your specific filename!
-    DATA_PATH = "data/knee_singlecoil_test/file1000000.h5"
-    load_and_visualize(DATA_PATH, mask_outer=False)
+    return image_abs, masked_kspace
