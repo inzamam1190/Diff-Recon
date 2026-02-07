@@ -3,11 +3,22 @@
 ## Project Goal
 Building a **Score-Based Diffusion Model** to reconstruct high-fidelity MRI images from undersampled k-space data using Langevin Dynamics.
 
-## Current Phase: Phase 1
-- [x] Environment Setup
-- [ ] Data Loading & K-Space Visualization
-- [ ] Basic IFFT Reconstruction
+## Phase 1: Data Mastery & Fourier Fundamentals
 
-## How to Run
-1. Install dependencies: `pip install -r requirements.txt`
-2. Run the loader: `python src/loader.py`
+The goal of this phase was to build a robust data pipeline to handle raw MRI k-space data and verify the relationship between frequency sampling and image reconstruction quality.
+
+### Visualization: K-Space vs. Image Domain
+Below is a comparison of how different frequency-domain masks affect the spatial reconstruction of a knee MRI slice.
+
+![K-Space vs Image Domain Comparison](outputs/kspace_vs_image_comparison.png)
+
+#### Key Insights:
+* **Full Reconstruction (None):** Utilizes the complete k-space. Note the vertical black bars in the k-space; these represent **oversampling** in the readout direction, a standard technique to prevent aliasing artifacts.
+* **Low-Pass Filter:** By keeping only the central 10% of k-space (the low frequencies), we retain tissue contrast and general shapes but lose sharp edges, resulting in a **blurry** image.
+* **High-Pass Filter:** By zeroing out the center and keeping the periphery, we retain only the sharp transitions and anatomical boundaries, creating an **edge-map** (or "sketch") of the knee.
+
+> **Engineering Note:** Initial tests on the `knee_singlecoil_test` dataset showed significant blurriness even in "Full Reconstruction." This was identified as intentional undersampling in the test set. Switching to `knee_singlecoil_val` provided the ground-truth data required to verify the Fourier Transform logic.
+
+## 🛠️ How to Run
+1. **Install Dependencies:** `pip install -r requirements.txt`
+2. **Generate Visualizations:** Run `python src/visualize_results.py` to recreate the k-space comparison grid in the `/outputs` folder.
